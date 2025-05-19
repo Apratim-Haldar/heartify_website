@@ -7,6 +7,10 @@ import pickle
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({"message": "pong"})
+
 @app.route('/predict', methods=['POST'])
 def predict():
     print("Before model load")

@@ -17,7 +17,7 @@ const Dashboard = () => {
     // First, get the user's heartifyID from the verify-token endpoint
     const getUserInfo = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/verify-token', {
+        const response = await axios.get('https://heartify-website.onrender.com/api/verify-token', {
           withCredentials: true
         });
         
@@ -46,7 +46,7 @@ const Dashboard = () => {
       
       // Fetch initial heart rate data for this user
       try {
-        const response = await axios.get(`http://localhost:5000/maxHR`, {
+        const response = await axios.get(`https://heartify-website.onrender.com/maxHR`, {
           withCredentials: true
         });
         const data = response.data;
@@ -58,7 +58,7 @@ const Dashboard = () => {
       }
 
       // Set up Socket.IO connection for real-time updates
-      const socket = io("http://localhost:5000", {
+      const socket = io("https://heartify-website.onrender.com", {
         withCredentials: true,
       });
 

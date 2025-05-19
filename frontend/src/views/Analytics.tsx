@@ -43,7 +43,7 @@ const Analytics: React.FC = () => {
   // Function to get user's heartifyID
   const getUserHeartifyID = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/verify-token', {
+      const response = await axios.get('https://heartify-website.onrender.com/api/verify-token', {
         withCredentials: true
       });
       
@@ -74,9 +74,9 @@ const Analytics: React.FC = () => {
 
       // Fetch all data in parallel
       const [dailyResponse, weeklyResponse, monthlyResponse] = await Promise.all([
-        fetch("http://localhost:5000/api/heart-rate/daily", { credentials: "include" }),
-        fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
-        fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" }),
+        fetch("https://heartify-website.onrender.com/api/heart-rate/daily", { credentials: "include" }),
+        fetch("https://heartify-website.onrender.com/api/heart-rate/weekly", { credentials: "include" }),
+        fetch("https://heartify-website.onrender.com/api/heart-rate/monthly", { credentials: "include" }),
       ]);
 
       if (!dailyResponse.ok) throw new Error("Failed to fetch daily data");
@@ -114,7 +114,7 @@ const Analytics: React.FC = () => {
       await fetchAllData();
 
       // Set up Socket.IO connection
-      socketRef.current = io("http://localhost:5000", {
+      socketRef.current = io("https://heartify-website.onrender.com", {
         withCredentials: true,
       });
 
@@ -184,8 +184,8 @@ const Analytics: React.FC = () => {
           if (!lastUpdateTime || now - parseInt(lastUpdateTime) > 30000) {
             // Update weekly and monthly data in the background
             Promise.all([
-              fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
-              fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" })
+              fetch("https://heartify-website.onrender.com/api/heart-rate/weekly", { credentials: "include" }),
+              fetch("https://heartify-website.onrender.com/api/heart-rate/monthly", { credentials: "include" })
             ]).then(([weeklyResponse, monthlyResponse]) => {
               if (weeklyResponse.ok && monthlyResponse.ok) {
                 return Promise.all([weeklyResponse.json(), monthlyResponse.json()]);
@@ -214,8 +214,8 @@ const Analytics: React.FC = () => {
             
             if (!lastUpdateTime || now - parseInt(lastUpdateTime) > 30000) {
               Promise.all([
-                fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
-                fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" })
+                fetch("https://heartify-website.onrender.com/api/heart-rate/weekly", { credentials: "include" }),
+                fetch("https://heartify-website.onrender.com/api/heart-rate/monthly", { credentials: "include" })
               ]).then(([weeklyResponse, monthlyResponse]) => {
                 if (weeklyResponse.ok && monthlyResponse.ok) {
                   return Promise.all([weeklyResponse.json(), monthlyResponse.json()]);

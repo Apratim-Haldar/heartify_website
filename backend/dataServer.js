@@ -398,7 +398,12 @@ app.post('/api/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET);
-    res.cookie('authToken', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: true,         // required on HTTPS
+      sameSite: 'None',     // ✅ allow cross-origin cookie sharing
+      maxAge: 86400000,
+    });
     res.json({ user: { id: user._id, name: user.username, heartifyID: user.heartifyID } });
   } catch (error) {
     res.status(500).json({ error: error.message });

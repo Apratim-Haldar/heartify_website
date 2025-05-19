@@ -18,7 +18,7 @@ connectDb();
 app.use(express.json());
 app.use(cookieParser());
 
-const allowedOrigins = ["http://localhost:5173"];
+const allowedOrigins = ["http://localhost:5173","http://localhost:5173"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -55,31 +55,58 @@ const setupChangeStream = async () => {
       if (change.operationType === 'insert') {
         const newHeartRate = change.fullDocument;
         
-        // Emit the new heart rate data to all connected clients
+        // Emit to the specific user's channel if heartifyID exists
+        if (newHeartRate.heartifyID) {
+          io.emit(`heartRateUpdate:${newHeartRate.heartifyID}`, {
+            maxBPM: newHeartRate.maxBPM,
+            avgBPM: newHeartRate.avgBPM,
+            minBPM: newHeartRate.minBPM,
+            timestamp: newHeartRate.createdAt,
+            operation: 'insert',
+            heartifyID: newHeartRate.heartifyID
+          });
+        }
+        
+        // Also emit to the general channel for backward compatibility
         io.emit('heartRateUpdate', {
           maxBPM: newHeartRate.maxBPM,
           avgBPM: newHeartRate.avgBPM,
           minBPM: newHeartRate.minBPM,
           timestamp: newHeartRate.createdAt,
-          operation: 'insert'
+          operation: 'insert',
+          heartifyID: newHeartRate.heartifyID
         });
         
-        console.log('New heart rate data inserted:', newHeartRate.maxBPM);
+        console.log('New heart rate data inserted:', newHeartRate.maxBPM, 'for user:', newHeartRate.heartifyID || 'unknown');
       } 
       else if (change.operationType === 'update') {
         // For updates, we need to fetch the updated document
         const updatedHeartRate = change.fullDocument;
         
         if (updatedHeartRate) {
+          // Emit to the specific user's channel if heartifyID exists
+          if (updatedHeartRate.heartifyID) {
+            io.emit(`heartRateUpdate:${updatedHeartRate.heartifyID}`, {
+              maxBPM: updatedHeartRate.maxBPM,
+              avgBPM: updatedHeartRate.avgBPM,
+              minBPM: updatedHeartRate.minBPM,
+              timestamp: updatedHeartRate.createdAt,
+              operation: 'update',
+              heartifyID: updatedHeartRate.heartifyID
+            });
+          }
+          
+          // Also emit to the general channel for backward compatibility
           io.emit('heartRateUpdate', {
             maxBPM: updatedHeartRate.maxBPM,
             avgBPM: updatedHeartRate.avgBPM,
             minBPM: updatedHeartRate.minBPM,
             timestamp: updatedHeartRate.createdAt,
-            operation: 'update'
+            operation: 'update',
+            heartifyID: updatedHeartRate.heartifyID
           });
           
-          console.log('Heart rate data updated:', updatedHeartRate.maxBPM);
+          console.log('Heart rate data updated:', updatedHeartRate.maxBPM, 'for user:', updatedHeartRate.heartifyID || 'unknown');
         }
       }
       else if (change.operationType === 'delete') {
@@ -118,6 +145,14 @@ const setupChangeStream = async () => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   
+  // Handle joining a room based on heartifyID
+  socket.on('join', (heartifyID) => {
+    if (heartifyID) {
+      socket.join(heartifyID);
+      console.log(`Client ${socket.id} joined room ${heartifyID}`);
+    }
+  });
+  
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
@@ -145,9 +180,11 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-app.get("/maxHR", async (req, res) => {
+app.get("/maxHR", authenticateToken, async (req, res) => {
   try {
-    const maxHR = await HeartRate.find().sort({ createdAt: -1 }).limit(1);
+    const maxHR = await HeartRate.find({ 
+      heartifyID: req.user.heartifyID 
+    }).sort({ createdAt: -1 }).limit(1);
     res.json(maxHR);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -155,16 +192,15 @@ app.get("/maxHR", async (req, res) => {
 });
 
 // Modified insertData endpoint to associate data with user
-app.post("/insertData", /* authenticateToken, */ async (req, res) => {
+app.post("/insertData", async (req, res) => {
   try {
-    const { maxbpm, av6, minbpm } = req.body;
+    const { maxbpm, av6, minbpm, heartifyID } = req.body;
     if (maxbpm && av6 && minbpm) {
       const newHeartRate = new HeartRate({
         maxBPM: maxbpm,
         avgBPM: av6,
         minBPM: minbpm,
-        /* userId: req.user._id, */
-        /* heartifyID: req.user.heartifyID */
+        heartifyID: heartifyID
       });
       await newHeartRate.save();
       res.status(201).json({ message: "Data inserted successfully" });
@@ -186,7 +222,7 @@ app.get("/api/heart-rate/daily", authenticateToken, async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const heartRateData = await HeartRate.find({
-      /* userId: req.user._id, */
+      heartifyID: req.user.heartifyID,
       createdAt: { $gte: today, $lt: tomorrow }
     }).sort({ createdAt: 1 });
     
@@ -207,7 +243,7 @@ app.get("/api/heart-rate/weekly", authenticateToken, async (req, res) => {
     lastWeek.setHours(0, 0, 0, 0);
     
     const heartRateData = await HeartRate.find({
-      /* userId: req.user._id, */
+      heartifyID: req.user.heartifyID,
       createdAt: { $gte: lastWeek, $lte: today }
     }).sort({ createdAt: 1 });
     
@@ -257,7 +293,7 @@ app.get("/api/heart-rate/monthly", authenticateToken, async (req, res) => {
     lastMonth.setHours(0, 0, 0, 0);
     
     const heartRateData = await HeartRate.find({
-      /* userId: req.user._id, */
+      heartifyID: req.user.heartifyID,
       createdAt: { $gte: lastMonth, $lte: today }
     }).sort({ createdAt: 1 });
     
@@ -395,7 +431,11 @@ app.get('/api/verify-auth', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await Users.findById(decoded.id);
-    res.json({ role: user.role, user:user });
+    // Only return the heartifyID and role
+    res.json({ 
+      role: user.role, 
+      heartifyID: user.heartifyID 
+    });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
   }

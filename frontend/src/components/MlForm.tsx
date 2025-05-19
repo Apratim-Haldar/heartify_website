@@ -156,6 +156,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [userHeartifyID, setUserHeartifyID] = useState(null)
 
   useEffect(() => {
     // Update local state when prop changes
@@ -167,39 +168,79 @@ const MlForm = ({ heartRate: propHeartRate }) => {
   useEffect(() => {
     // Only set up socket connection if we don't have a prop value
     if (propHeartRate === null) {
-      const fetchInitialHeartRate = async () => {
+      // Get the user's heartifyID first
+      const getUserInfo = async () => {
         try {
-          const response = await axios.get(`http://localhost:5000/maxHR`)
-          const data = response.data
+          const response = await axios.get('http://localhost:5000/api/verify-token', {
+            withCredentials: true
+          });
+          
+          if (response.data.authenticated && response.data.user.heartifyID) {
+            setUserHeartifyID(response.data.user.heartifyID);
+            return response.data.user.heartifyID;
+          }
+          return null;
+        } catch (error) {
+          console.error("Error fetching user info:", error);
+          return null;
+        }
+      };
+
+      const setupHeartRateMonitoring = async () => {
+        const heartifyID = await getUserInfo();
+        
+        if (!heartifyID) {
+          console.error("No heartifyID found, cannot fetch heart rate data");
+          return;
+        }
+
+        // Fetch initial heart rate data
+        try {
+          const response = await axios.get(`http://localhost:5000/maxHR`, {
+            withCredentials: true
+          });
+          const data = response.data;
           if (data.length > 0) {
-            setHeartRate(data[0].maxBPM)
+            setHeartRate(data[0].maxBPM);
           }
         } catch (error) {
-          console.error("Error fetching heart rate:", error)
+          console.error("Error fetching heart rate:", error);
         }
-      }
 
-      fetchInitialHeartRate()
+        // Set up Socket.IO connection for real-time updates
+        const socket = io("http://localhost:5000", {
+          withCredentials: true,
+        });
 
-      // Set up Socket.IO connection for real-time updates
-      const socket = io("http://localhost:5000", {
-        withCredentials: true,
-      })
+        socket.on("connect", () => {
+          console.log("MlForm connected to WebSocket server");
+          // Join a room specific to this user's heartifyID
+          socket.emit('join', heartifyID);
+        });
 
-      socket.on("connect", () => {
-        console.log("MlForm connected to WebSocket server")
-      })
+        // Listen for user-specific heart rate updates
+        socket.on(`heartRateUpdate:${heartifyID}`, (data) => {
+          console.log("MlForm received user-specific heart rate update:", data);
+          setHeartRate(data.maxBPM);
+        });
 
-      socket.on("heartRateUpdate", (data) => {
-        console.log("MlForm received real-time heart rate update:", data)
-        setHeartRate(data.maxBPM)
-      })
+        // Also listen for the general heartRateUpdate event for backward compatibility
+        socket.on("heartRateUpdate", (data) => {
+          console.log("MlForm received general heart rate update:", data);
+          // Only update if the data is relevant to this user
+          if (data.heartifyID === heartifyID || !data.heartifyID) {
+            setHeartRate(data.maxBPM);
+          }
+        });
 
-      return () => {
-        socket.disconnect()
-      }
+        return () => {
+          socket.disconnect();
+        };
+      };
+
+      setupHeartRateMonitoring();
     }
-  }, [propHeartRate])
+  }, [propHeartRate]);
 
   const onSubmit = async (values) => {
     setLoading(true)

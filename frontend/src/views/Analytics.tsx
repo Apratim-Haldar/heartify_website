@@ -15,6 +15,7 @@ import {
 import Navigation from "../components/Navigation"
 import { Heart, TrendingUp, TrendingDown, Activity, Calendar, Clock, ChevronRight } from "lucide-react"
 import { io } from "socket.io-client"
+import axios from "axios"
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
@@ -35,189 +36,236 @@ const Analytics: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<HeartRateData[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+  const [userHeartifyID, setUserHeartifyID] = useState<string | null>(null)
   const socketRef = useRef<any>(null)
   const chartRef = useRef<any>(null)
+
+  // Function to get user's heartifyID
+  const getUserHeartifyID = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/verify-token', {
+        withCredentials: true
+      });
+      
+      if (response.data.authenticated && response.data.user.heartifyID) {
+        setUserHeartifyID(response.data.user.heartifyID);
+        return response.data.user.heartifyID;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching user info:", error);
+      setError("Unable to authenticate user. Please log in again.");
+      return null;
+    }
+  };
 
   // Function to fetch all data
   const fetchAllData = async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
+
+      // Ensure we have the user's heartifyID
+      const heartifyID = userHeartifyID || await getUserHeartifyID();
+      
+      if (!heartifyID) {
+        throw new Error("User authentication required");
+      }
 
       // Fetch all data in parallel
       const [dailyResponse, weeklyResponse, monthlyResponse] = await Promise.all([
         fetch("http://localhost:5000/api/heart-rate/daily", { credentials: "include" }),
         fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
         fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" }),
-      ])
+      ]);
 
-      if (!dailyResponse.ok) throw new Error("Failed to fetch daily data")
-      if (!weeklyResponse.ok) throw new Error("Failed to fetch weekly data")
-      if (!monthlyResponse.ok) throw new Error("Failed to fetch monthly data")
+      if (!dailyResponse.ok) throw new Error("Failed to fetch daily data");
+      if (!weeklyResponse.ok) throw new Error("Failed to fetch weekly data");
+      if (!monthlyResponse.ok) throw new Error("Failed to fetch monthly data");
 
-      const daily = await dailyResponse.json()
-      const weekly = await weeklyResponse.json()
-      const monthly = await monthlyResponse.json()
+      const daily = await dailyResponse.json();
+      const weekly = await weeklyResponse.json();
+      const monthly = await monthlyResponse.json();
 
-      setDailyData(daily)
-      setWeeklyData(weekly)
-      setMonthlyData(monthly)
+      setDailyData(daily);
+      setWeeklyData(weekly);
+      setMonthlyData(monthly);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
-      console.error("Error fetching heart rate data:", err)
+      setError(err instanceof Error ? err.message : "An error occurred");
+      console.error("Error fetching heart rate data:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    // Initial data fetch
-    fetchAllData()
-
-    // Set up Socket.IO connection
-    socketRef.current = io("http://localhost:5000", {
-      withCredentials: true,
-    })
-
-    socketRef.current.on("connect", () => {
-      console.log("Analytics connected to WebSocket server")
-    })
-
-    socketRef.current.on("heartRateUpdate", (data) => {
-      console.log("Analytics received real-time heart rate update:", data)
+    // Initial setup
+    const setupAnalytics = async () => {
+      // Get user's heartifyID first
+      const heartifyID = await getUserHeartifyID();
       
-      // Instead of fetching all data, update only the relevant dataset
-      if (data.operation === 'insert' || data.operation === 'update' || data.operation === 'latest' || data.operation === 'delete') {
-        // For daily data, add the new entry if it's from today
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dataDate = new Date(data.timestamp)
+      if (!heartifyID) {
+        setError("User authentication required");
+        setLoading(false);
+        return;
+      }
+      
+      // Initial data fetch
+      await fetchAllData();
+
+      // Set up Socket.IO connection
+      socketRef.current = io("http://localhost:5000", {
+        withCredentials: true,
+      });
+
+      // Inside the useEffect where you set up the socket connection
+      
+      socketRef.current.on("connect", () => {
+        console.log("Analytics connected to WebSocket server");
+        // Join room specific to this user
+        socketRef.current.emit('join', heartifyID);
+      });
+      
+      // Listen for updates specific to this user
+      socketRef.current.on(`heartRateUpdate:${heartifyID}`, (data) => {
+        console.log("Analytics received real-time heart rate update:", data);
         
-        if (dataDate >= today) {
-          // Update daily data
-          setDailyData(prevData => {
-            // Create a copy of the previous data
-            const newData = [...prevData]
-            
-            // Check if we should add a new entry or update an existing one
-            const existingIndex = newData.findIndex(item => 
-              new Date(item.createdAt).getTime() === dataDate.getTime()
-            )
-            
-            if (existingIndex >= 0) {
-              // Update existing entry
-              newData[existingIndex] = {
-                ...newData[existingIndex],
-                maxBPM: data.maxBPM,
-                avgBPM: data.avgBPM,
-                minBPM: data.minBPM,
-              }
-            } else {
-              // Add new entry
-              newData.push({
-                maxBPM: data.maxBPM,
-                avgBPM: data.avgBPM,
-                minBPM: data.minBPM,
-                createdAt: data.timestamp
-              })
+        // Update data based on operation type
+        if (data.operation === 'insert' || data.operation === 'update' || data.operation === 'latest') {
+          // For daily data, add the new entry if it's from today
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const dataDate = new Date(data.timestamp);
+          
+          if (dataDate >= today) {
+            // Update daily data
+            setDailyData(prevData => {
+              // Create a copy of the previous data
+              const newData = [...prevData];
               
-              // Sort by creation time
-              newData.sort((a, b) => 
-                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-              )
-            }
-            
-            return newData
-          })
-        }
-        
-        // For weekly and monthly data, we need to recalculate aggregates
-        // This is more complex, so we'll fetch those less frequently
-        const lastUpdateTime = sessionStorage.getItem('lastAggregateUpdate')
-        const now = Date.now()
-        
-        // Only update aggregates every 30 seconds to avoid too many refreshes
-        if (!lastUpdateTime || now - parseInt(lastUpdateTime) > 30000) {
-          // Update weekly and monthly data in the background
-          Promise.all([
-            fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
-            fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" })
-          ]).then(([weeklyResponse, monthlyResponse]) => {
-            if (weeklyResponse.ok && monthlyResponse.ok) {
-              return Promise.all([weeklyResponse.json(), monthlyResponse.json()])
-            }
-            throw new Error("Failed to fetch aggregate data")
-          }).then(([weekly, monthly]) => {
-            setWeeklyData(weekly)
-            setMonthlyData(monthly)
-            sessionStorage.setItem('lastAggregateUpdate', now.toString())
-          }).catch(err => {
-            console.error("Error updating aggregate data:", err)
-          })
-        }
-      } else if (data.operation === 'delete') {
-        // Handle deletion by removing the entry if it exists in our datasets
-        if (data.documentId) {
-          // For daily data, we can remove the specific entry
-          setDailyData(prevData => 
-            prevData.filter(item => item._id !== data.documentId)
-          )
+              // Check if we should add a new entry or update an existing one
+              const existingIndex = newData.findIndex(item => 
+                new Date(item.createdAt).getTime() === dataDate.getTime()
+              );
+              
+              if (existingIndex >= 0) {
+                // Update existing entry
+                newData[existingIndex] = {
+                  ...newData[existingIndex],
+                  maxBPM: data.maxBPM,
+                  avgBPM: data.avgBPM,
+                  minBPM: data.minBPM,
+                };
+              } else {
+                // Add new entry
+                newData.push({
+                  maxBPM: data.maxBPM,
+                  avgBPM: data.avgBPM,
+                  minBPM: data.minBPM,
+                  createdAt: data.timestamp
+                });
+                
+                // Sort by creation time
+                newData.sort((a, b) => 
+                  new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+              }
+              
+              return newData;
+            });
+          }
           
-          // For weekly and monthly, we should refresh the data
-          // But we'll do it with the same throttling as above
-          const lastUpdateTime = sessionStorage.getItem('lastAggregateUpdate')
-          const now = Date.now()
+          // For weekly and monthly data, we need to recalculate aggregates
+          // This is more complex, so we'll fetch those less frequently
+          const lastUpdateTime = sessionStorage.getItem('lastAggregateUpdate');
+          const now = Date.now();
           
+          // Only update aggregates every 30 seconds to avoid too many refreshes
           if (!lastUpdateTime || now - parseInt(lastUpdateTime) > 30000) {
+            // Update weekly and monthly data in the background
             Promise.all([
               fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
               fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" })
             ]).then(([weeklyResponse, monthlyResponse]) => {
               if (weeklyResponse.ok && monthlyResponse.ok) {
-                return Promise.all([weeklyResponse.json(), monthlyResponse.json()])
+                return Promise.all([weeklyResponse.json(), monthlyResponse.json()]);
               }
-              throw new Error("Failed to fetch aggregate data")
+              throw new Error("Failed to fetch aggregate data");
             }).then(([weekly, monthly]) => {
-              setWeeklyData(weekly)
-              setMonthlyData(monthly)
-              sessionStorage.setItem('lastAggregateUpdate', now.toString())
+              setWeeklyData(weekly);
+              setMonthlyData(monthly);
+              sessionStorage.setItem('lastAggregateUpdate', now.toString());
             }).catch(err => {
-              console.error("Error updating aggregate data:", err)
-            })
+              console.error("Error updating aggregate data:", err);
+            });
+          }
+        } else if (data.operation === 'delete') {
+          // Handle deletion by removing the entry if it exists in our datasets
+          if (data.documentId) {
+            // For daily data, we can remove the specific entry
+            setDailyData(prevData => 
+              prevData.filter(item => item._id !== data.documentId)
+            );
+            
+            // For weekly and monthly, we should refresh the data
+            // But we'll do it with the same throttling as above
+            const lastUpdateTime = sessionStorage.getItem('lastAggregateUpdate');
+            const now = Date.now();
+            
+            if (!lastUpdateTime || now - parseInt(lastUpdateTime) > 30000) {
+              Promise.all([
+                fetch("http://localhost:5000/api/heart-rate/weekly", { credentials: "include" }),
+                fetch("http://localhost:5000/api/heart-rate/monthly", { credentials: "include" })
+              ]).then(([weeklyResponse, monthlyResponse]) => {
+                if (weeklyResponse.ok && monthlyResponse.ok) {
+                  return Promise.all([weeklyResponse.json(), monthlyResponse.json()]);
+                }
+                throw new Error("Failed to fetch aggregate data");
+              }).then(([weekly, monthly]) => {
+                setWeeklyData(weekly);
+                setMonthlyData(monthly);
+                sessionStorage.setItem('lastAggregateUpdate', now.toString());
+              }).catch(err => {
+                console.error("Error updating aggregate data:", err);
+              });
+            }
           }
         }
-      }
-      
-      // Visual feedback that new data arrived - only for the active chart
-      if (chartRef.current) {
-        // Add a subtle animation to the chart container
-        const chartContainer = chartRef.current.parentNode
-        if (chartContainer) {
-          chartContainer.classList.add("pulse-animation")
-          setTimeout(() => {
-            chartContainer.classList.remove("pulse-animation")
-          }, 1000)
+        
+        // Visual feedback that new data arrived - only for the active chart
+        if (chartRef.current) {
+          // Add a subtle animation to the chart container
+          const chartContainer = chartRef.current.parentNode;
+          if (chartContainer) {
+            chartContainer.classList.add("pulse-animation");
+            setTimeout(() => {
+              chartContainer.classList.remove("pulse-animation");
+            }, 1000);
+          }
         }
-      }
-    })
+      });
 
-    socketRef.current.on("connect_error", (error) => {
-      console.error("WebSocket connection error:", error)
-    })
+      socketRef.current.on("connect_error", (error) => {
+        console.error("WebSocket connection error:", error);
+      });
+    };
+
+    setupAnalytics();
 
     // Clean up on unmount
     return () => {
       if (socketRef.current) {
-        socketRef.current.disconnect()
+        socketRef.current.disconnect();
       }
-      sessionStorage.removeItem('lastAggregateUpdate')
-    }
-  }, [])
+      sessionStorage.removeItem('lastAggregateUpdate');
+    };
+  }, []);
 
+  // Rest of your component remains the same
   const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   const chartOptions: ChartOptions<"line"> = {
     responsive: true,

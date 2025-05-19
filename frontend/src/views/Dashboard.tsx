@@ -11,51 +11,99 @@ const Dashboard = () => {
   const [animateHeart, setAnimateHeart] = useState(false)
   const navigate = useNavigate();
   const [heartRate, setHeartRate] = useState(null)
+  const [userHeartifyID, setUserHeartifyID] = useState(null)
 
   useEffect(() => {
+    // First, get the user's heartifyID from the verify-token endpoint
+    const getUserInfo = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/verify-token', {
+          withCredentials: true
+        });
+        
+        if (response.data.authenticated && response.data.user.heartifyID) {
+          setUserHeartifyID(response.data.user.heartifyID);
+          return response.data.user.heartifyID;
+        }
+        return null;
+      } catch (error) {
+        console.error("Error fetching user info:", error);
+        return null;
+      }
+    };
+
     const interval = setInterval(() => {
       setAnimateHeart((prev) => !prev)
     }, 2000)
-    const fetchInitialHeartRate = async () => {
+    
+    const setupDataAndSocket = async () => {
+      const heartifyID = await getUserInfo();
+      
+      if (!heartifyID) {
+        console.error("No heartifyID found, cannot fetch heart rate data");
+        return;
+      }
+      
+      // Fetch initial heart rate data for this user
       try {
-        const response = await axios.get(`http://localhost:5000/maxHR`)
-        const data = response.data
+        const response = await axios.get(`http://localhost:5000/maxHR`, {
+          withCredentials: true
+        });
+        const data = response.data;
         if (data.length > 0) {
-          setHeartRate(data[0].maxBPM)
+          setHeartRate(data[0].maxBPM);
         }
       } catch (error) {
-        console.error("Error fetching initial heart rate:", error)
+        console.error("Error fetching initial heart rate:", error);
       }
-    }
 
-    fetchInitialHeartRate()
+      // Set up Socket.IO connection for real-time updates
+      const socket = io("http://localhost:5000", {
+        withCredentials: true,
+      });
 
-    // Set up Socket.IO connection for real-time updates
-    const socket = io("http://localhost:5000", {
-      withCredentials: true,
-    })
+      socket.on("connect", () => {
+        console.log("Connected to WebSocket server");
+        // Join a room specific to this user's heartifyID
+        socket.emit('join', heartifyID);
+      });
 
-    socket.on("connect", () => {
-      console.log("Connected to WebSocket server")
-    })
+      // Listen for both the user-specific event and the general event
+      socket.on(`heartRateUpdate:${heartifyID}`, (data) => {
+        console.log("Received user-specific heart rate update:", data);
+        setHeartRate(data.maxBPM);
+        // Trigger heart animation on new data
+        setAnimateHeart(true);
+        setTimeout(() => setAnimateHeart(false), 1000);
+      });
 
-    socket.on("heartRateUpdate", (data) => {
-      console.log("Received real-time heart rate update:", data)
-      setHeartRate(data.maxBPM)
-      // Trigger heart animation on new data
-      setAnimateHeart(true)
-      setTimeout(() => setAnimateHeart(false), 1000)
-    })
+      // Also listen for the general heartRateUpdate event for backward compatibility
+      socket.on("heartRateUpdate", (data) => {
+        console.log("Received general heart rate update:", data);
+        // Only update if the data is relevant to this user
+        if (data.heartifyID === heartifyID || !data.heartifyID) {
+          setHeartRate(data.maxBPM);
+          // Trigger heart animation on new data
+          setAnimateHeart(true);
+          setTimeout(() => setAnimateHeart(false), 1000);
+        }
+      });
 
-    socket.on("connect_error", (error) => {
-      console.error("WebSocket connection error:", error)
-    })
+      socket.on("connect_error", (error) => {
+        console.error("WebSocket connection error:", error);
+      });
+
+      return () => {
+        socket.disconnect();
+      };
+    };
+
+    setupDataAndSocket();
 
     return () => {
-      clearInterval(interval)
-      socket.disconnect()
-    }
-  }, [])
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-rose-50">

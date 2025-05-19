@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import Auth from "../components/Auth"
 import { useNavigate } from "react-router-dom"
 import { Heart, Activity, Shield, ArrowRight, ChevronDown } from "lucide-react"
+import heartbg from "../assets/heartbg.png";
 
 const Landing = () => {
   const [showAuth, setShowAuth] = useState(false)
@@ -88,7 +89,7 @@ const Landing = () => {
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-rose-500 to-pink-600 rounded-3xl blur-lg opacity-20"></div>
               <div className="relative overflow-hidden rounded-3xl shadow-2xl">
-                <img src="/public/heartbg.png" alt="Heart Rate Monitoring" className="w-full h-full object-cover" />
+                <img src={heartbg} alt="Heart Rate Monitoring" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                 <div className="absolute bottom-0 left-0 right-0 p-6">
                   <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-lg">

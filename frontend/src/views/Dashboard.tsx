@@ -1,6 +1,6 @@
 import React from "react"
 import { useState, useEffect } from "react"
-import MlForm from "../components/MlForm"
+const MlForm = React.lazy(()=>import("../components/MlForm"))
 import Navigation from "../components/Navigation"
 import { Heart, Activity, ArrowRight } from "lucide-react"
 import { useNavigate } from "react-router"

@@ -18,7 +18,7 @@ connectDb();
 app.use(express.json());
 app.use(cookieParser());
 
-const allowedOrigins = ["http://localhost:5173","http://localhost:5173"];
+const allowedOrigins = ["http://localhost:5173","http://localhost:5173","http://localhost:3000","https://heartify-website.vercel.app/"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -180,6 +180,9 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+app.get("/ping", async(req,res)=>{
+  res.json({message:"pong"});
+});
 app.get("/maxHR", authenticateToken, async (req, res) => {
   try {
     const maxHR = await HeartRate.find({ 

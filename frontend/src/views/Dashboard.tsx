@@ -23,6 +23,7 @@ const Dashboard = () => {
         
         if (response.data.authenticated && response.data.user.heartifyID) {
           setUserHeartifyID(response.data.user.heartifyID);
+          console.log(response.data);
           return response.data.user.heartifyID;
         }
         return null;

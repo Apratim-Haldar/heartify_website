@@ -12,7 +12,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/verify-token', {
+        const response = await fetch('https://heartify-website.onrender.com/api/verify-token', {
           credentials: 'include'
         });
         

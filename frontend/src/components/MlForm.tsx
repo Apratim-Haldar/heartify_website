@@ -247,7 +247,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
     setResult(null)
     setError(null)
     try {
-      const response = await axios.post("http://localhost:5100/predict", {
+      const response = await axios.post("heartifywebsite-production.up.railway.app/predict", {
         ...values,
         latest_maxHR: heartRate,
       })

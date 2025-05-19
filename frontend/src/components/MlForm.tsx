@@ -171,7 +171,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
       // Get the user's heartifyID first
       const getUserInfo = async () => {
         try {
-          const response = await axios.get('http://localhost:5000/api/verify-token', {
+          const response = await axios.get('https://heartify-website.onrender.com/api/verify-token', {
             withCredentials: true
           });
           
@@ -196,7 +196,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
 
         // Fetch initial heart rate data
         try {
-          const response = await axios.get(`http://localhost:5000/maxHR`, {
+          const response = await axios.get(`https://heartify-website.onrender.com/maxHR`, {
             withCredentials: true
           });
           const data = response.data;
@@ -208,7 +208,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
         }
 
         // Set up Socket.IO connection for real-time updates
-        const socket = io("http://localhost:5000", {
+        const socket = io("https://heartify-website.onrender.com", {
           withCredentials: true,
         });
 

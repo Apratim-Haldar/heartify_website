@@ -23,7 +23,7 @@ const Navigation: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch("http://localhost:5000/api/logout", {
+      await fetch("https://heartify-website.onrender.com/api/logout", {
         method: "POST",
         credentials: "include",
       })

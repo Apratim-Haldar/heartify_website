@@ -32,7 +32,7 @@ export default function Auth({ handleCancel }: prop) {
 
     try {
       const endpoint = isSignUp ? "/api/signup" : "/api/login"
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`https://heartify-website.onrender.com${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

@@ -342,10 +342,10 @@ const MlForm = ({ heartRate: propHeartRate }) => {
               }}
             >
               <option value="">Select Chest Pain Type</option>
-              <option value="TA">Typical Angina</option>
-              <option value="ATA">Atypical Angina</option>
-              <option value="NAP">Non-Anginal Pain</option>
-              <option value="ASY">Asymptomatic</option>
+              <option value="TA">Sharp/Stabbing pain, rather than Pressure or Squeezing</option>
+              <option value="ATA">Muscle pain, not related to heart</option>
+              <option value="NAP">Chest pain not related to the heart (may be muscular or gastric)</option>
+              <option value="ASY">No Chest Pain</option>
             </select>
           </div>
 

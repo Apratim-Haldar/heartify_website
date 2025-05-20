@@ -198,7 +198,12 @@ app.get("/maxHR", authenticateToken, async (req, res) => {
 app.post("/insertData", async (req, res) => {
   try {
     const { maxbpm, av6, minbpm, heartifyID } = req.body;
-    if (maxbpm && av6 && minbpm) {
+    if (
+      typeof maxbpm == "number" &&
+      typeof av6 == "number" &&
+      typeof minbpm == "number" &&
+      typeof heartifyID == "string"
+    ) {
       const newHeartRate = new HeartRate({
         maxBPM: maxbpm,
         avgBPM: av6,

@@ -487,7 +487,7 @@ const MlForm = ({ heartRate: propHeartRate }) => {
               {...register("OldPeak", {
                 required: true,
                 valueAsNumber: true,
-                min: 5,
+                min: 0,
                 max: 10,
               })}
             />
